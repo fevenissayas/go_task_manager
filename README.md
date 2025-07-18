@@ -8,7 +8,7 @@
 - Clean and modular codebase
 
 ## Project Structure
-
+```
 go_task_manager/
 ├── main.go # Application entry point
 ├── controllers/ # HTTP request handlers
@@ -22,7 +22,7 @@ go_task_manager/
 ├── docs/ # API documentation
 │ └── api_documentation.md
 └── go.mod # Go module file
-
+```
 
 ## Getting Started
 
