@@ -4,7 +4,7 @@
 
 - Create, read, update, and delete tasks  
 - Retrieve all tasks or a specific task by ID  
-- No database setup required  
+- MongoDB database  
 - Clean and modular codebase
 
 ## Project Structure
