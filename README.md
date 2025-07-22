@@ -6,6 +6,9 @@
 - Retrieve all tasks or a specific task by ID  
 - MongoDB database  
 - Clean and modular codebase
+- Role-based access control
+- JWT-based authentication and protected routes
+- User registration and login with hashed passwords
 
 ## Project Structure
 ```
