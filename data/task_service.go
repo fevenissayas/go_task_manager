@@ -1,53 +1,103 @@
 package data
 
-import "restfulapi/models"
+import (
+	"context"
+	"errors"
+	"restfulapi/models"
+	"time"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+)
 
+func Add(task *models.Task) (primitive.ObjectID, error) {
+	task.ID = primitive.NewObjectID()
 
-func Add(task *models.Task) bool {
-	for _,existingTask := range models.Tasks {
-		if task.ID == existingTask.ID {
-			return false
-		}
-	}
-	models.Tasks = append(models.Tasks, task)
-	return true
-}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-
-func GetAll() []*models.Task{
-	return models.Tasks
-}
-
-func Get(id string) (*models.Task, bool) {
-	for _, task := range models.Tasks {
-		if task.ID == id {
-			return task, true
-		}
-	}
-	return nil, false
-}
-
-
-func Delete(id string) bool{
-	for i, task := range models.Tasks {
-		if task.ID == id {
-			models.Tasks = append(models.Tasks[:i], models.Tasks[i+1:]...)
-			return true
-		}
-	}
-	return false
+	_, err := TaskCollection.InsertOne(ctx, task)
+	return task.ID, err
 
 }
 
-func Update(id string, updatedTask *models.Task) bool {
-	for i, task := range models.Tasks {
-		if task.ID == id {
-			models.Tasks[i].Title = updatedTask.Title
-			models.Tasks[i].Description = updatedTask.Description
-			models.Tasks[i].DueDate = updatedTask.DueDate
-			models.Tasks[i].Status = updatedTask.Status
-			return true
-		}
+func GetAll() ([]*models.Task, error){
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cursor, err := TaskCollection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
 	}
-	return false
+	defer cursor.Close(ctx)
+
+	var tasks []*models.Task
+	for cursor.Next(ctx) {
+		var task models.Task
+		if err:= cursor.Decode(&task); err != nil {
+			return nil, err
+		}
+
+		tasks = append(tasks, &task)
+	}
+	return tasks, nil
+}
+
+func Get(id string) (*models.Task, error) {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var task models.Task
+	err = TaskCollection.FindOne(ctx, bson.M{"_id": objID}).Decode(&task)
+	if err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+func Delete(id string) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	result, err := TaskCollection.DeleteOne(ctx, bson.M{"_id": objID})
+	if err != nil {
+		return err
+	}
+	
+	if result.DeletedCount == 0 {
+		return errors.New("task not found")
+	}
+
+	return nil
+}
+
+func Update(id string, updatedTask *models.Task) error {
+	objID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$set": bson.M {
+			"title":       updatedTask.Title,
+			"description": updatedTask.Description,
+			"due_date":    updatedTask.DueDate,
+			"status":      updatedTask.Status,
+		},
+	}
+
+	_, err = TaskCollection.UpdateByID(ctx, objID, update)
+	return err
 }
