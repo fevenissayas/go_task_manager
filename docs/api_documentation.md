@@ -56,7 +56,7 @@ Authorization: Bearer <your_token_here>
 ---
 
 ### Promote User
-`PUT /promote` (Admin only)
+`POST /promote` (Admin only)
 
 **Request Body:**
 ```json
