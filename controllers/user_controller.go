@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-var jwtSecret = []byte("my_secret_key_but_will_be_replaced_by_env_later") 
+var jwtSecret = []byte("secret_key")
 
 func GenerateJWT(userID primitive.ObjectID) (string, error) {
 	claims := jwt.MapClaims{
