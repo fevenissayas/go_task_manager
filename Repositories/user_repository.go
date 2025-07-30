@@ -1,16 +1,26 @@
-package data
+package repositories
 
 import (
 	"context"
 	"errors"
-	"restfulapi/models"
 	"time"
+	"restfulapi/Domain"
+	"restfulapi/Infrastructure"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func CreateUser(user *models.User) (primitive.ObjectID, error) {
+type MongoUserRepository struct {
+	Collection *mongo.Collection
+}
+
+func NewMongoUserRepository(col *mongo.Collection) domain.UserRepository {
+	return &MongoUserRepository{Collection: col}
+}
+
+func (r *MongoUserRepository) Create(user *domain.User) (primitive.ObjectID, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -20,21 +30,20 @@ func CreateUser(user *models.User) (primitive.ObjectID, error) {
 			{"email": user.Email},
 		},
 	}
-	var existing models.User
-	err := UserCollection.FindOne(ctx, filter).Decode(&existing)
+	var existing domain.User
+	err := r.Collection.FindOne(ctx, filter).Decode(&existing)
 	if err == nil {
 		return primitive.NilObjectID, errors.New("username or email already in use")
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	hashedPassword, err := infrastructure.HashPassword(user.Password)
 	if err != nil {
 		return primitive.NilObjectID, err
 	}
-
 	user.ID = primitive.NewObjectID()
 	user.Password = string(hashedPassword)
 
-	count, err := UserCollection.CountDocuments(ctx, bson.M{})
+	count, err := r.Collection.CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return primitive.NilObjectID, err
 	}
@@ -44,7 +53,7 @@ func CreateUser(user *models.User) (primitive.ObjectID, error) {
 		user.Role = "user"
 	}
 
-	_, err = UserCollection.InsertOne(ctx, user)
+	_, err = r.Collection.InsertOne(ctx, user)
 	if err != nil {
 		return primitive.NilObjectID, err
 	}
@@ -52,18 +61,18 @@ func CreateUser(user *models.User) (primitive.ObjectID, error) {
 	return user.ID, nil
 }
 
-func AuthenticateUser(usernameOrEmail, password string) (*models.User, error) {
+func (r *MongoUserRepository) Authenticate(usernameOrEmail, password string) (*domain.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var user models.User
+	var user domain.User
 	filter := bson.M{
 		"$or": []bson.M{
 			{"username": usernameOrEmail},
 			{"email": usernameOrEmail},
 		},
 	}
-	err := UserCollection.FindOne(ctx, filter).Decode(&user)
+	err := r.Collection.FindOne(ctx, filter).Decode(&user)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
@@ -76,67 +85,59 @@ func AuthenticateUser(usernameOrEmail, password string) (*models.User, error) {
 	return &user, nil
 }
 
-func GetUserByID(id primitive.ObjectID) (*models.User, error) {
+func (r *MongoUserRepository) GetByID(id primitive.ObjectID) (*domain.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var user models.User
-	err := UserCollection.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
+	var user domain.User
+	err := r.Collection.FindOne(ctx, bson.M{"_id": id}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func GetAllUsers() ([]models.User, error) {
+func (r *MongoUserRepository) GetAll() ([]*domain.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cursor, err := UserCollection.Find(ctx, bson.M{})
+	cursor, err := r.Collection.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(ctx)
 
-	var users []models.User
+	var users []*domain.User
 	for cursor.Next(ctx) {
-		var user models.User
+		var user domain.User
 		if err := cursor.Decode(&user); err != nil {
 			return nil, err
 		}
-		users = append(users, user)
-	}
-	if err := cursor.Err(); err != nil {
-		return nil, err
+		users = append(users, &user)
 	}
 	return users, nil
 }
 
-func PromoteUser(userID primitive.ObjectID, newRole string) error {
+func (r *MongoUserRepository) PromoteUser(userID primitive.ObjectID, newRole string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	update := bson.M{"$set": bson.M{"role": newRole}}
-	result, err := UserCollection.UpdateByID(ctx, userID, update)
+	result, err := r.Collection.UpdateByID(ctx, userID, update)
 	if err != nil {
 		return err
 	}
-
 	if result.MatchedCount == 0 {
 		return errors.New("user not found")
 	}
-
 	return nil
 }
 
-func DeleteUser(id string) error {
-	objID, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return err
-	}
+func (r *MongoUserRepository) DeleteByID(id primitive.ObjectID) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := UserCollection.DeleteOne(ctx, bson.M{"_id": objID})
+
+	result, err := r.Collection.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {
 		return err
 	}
