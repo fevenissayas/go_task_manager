@@ -6,11 +6,11 @@ import (
 )
 
 type Task struct {
-	ID          primitive.ObjectID    `json:"id" bson:"_id,omitempty"`
-	Title       string    `json:"title" bson:"title"`
-	Description string    `json:"description" bson:"description"`
-	DueDate     time.Time `json:"due_date" bson:"due_date"`
-	Status      string    `json:"status" bson:"status"`
+	ID          primitive.ObjectID
+	Title       string
+	Description string
+	DueDate     time.Time
+	Status      string
 }
 
 type TaskRepository interface {
